@@ -1,0 +1,66 @@
+#!/bin/sh
+# Whole local suite for a clean clone.
+set -e
+ROOT="$(CDPATH= cd -- "$(dirname "$0")/.." && pwd)"
+cd "$ROOT"
+
+fail=0
+run() {
+  name=$1
+  shift
+  if "$@"; then
+    echo "ok $name"
+  else
+    echo "FAIL $name" >&2
+    fail=1
+  fi
+}
+
+# Constants roundtrip (same contract as scripts/checks/b1 when present)
+run constants_roundtrip python3 - <<'PY'
+import json, subprocess, sys
+input_wb = {"sheets": {"Sheet1": {"A1": 1, "A2": "text", "A3": True}, "Sheet2": {}}}
+raw = json.dumps(input_wb)
+got = subprocess.check_output(["./engine", "-"], input=raw.encode())
+if json.loads(got) != input_wb:
+    print("roundtrip mismatch", got, file=sys.stderr)
+    sys.exit(1)
+PY
+
+run cell_flag python3 - <<'PY'
+import json, subprocess, sys
+raw = json.dumps({"sheets": {"Sheet1": {"A1": 1, "A2": "text"}}})
+got = subprocess.check_output(["./engine", "-", "--cell", "Sheet1!A1"], input=raw.encode())
+if json.loads(got) != 1:
+    print("cell flag mismatch", got, file=sys.stderr)
+    sys.exit(1)
+PY
+
+run discover_functions python3 - <<'PY'
+from src.functions.registry import discover_functions
+found = discover_functions()
+needed = {"math", "logic_text", "lookup"}
+missing = needed - set(found)
+if missing:
+    raise SystemExit(f"missing function packages: {sorted(missing)}")
+print("discovered", sorted(found))
+PY
+
+run part_dirs python3 - <<'PY'
+from pathlib import Path
+root = Path(".")
+needed = [
+    "src/parser", "src/values", "src/eval", "src/recalc",
+    "src/functions/math", "src/functions/logic_text", "src/functions/lookup",
+    "web/grid", "web/formula_bar", "web/io", "tests/e2e",
+]
+missing = [p for p in needed if not (root / p).is_dir()]
+if missing:
+    raise SystemExit(f"missing dirs: {missing}")
+PY
+
+if [ "$fail" -ne 0 ]; then
+  echo "suite failed" >&2
+  exit 1
+fi
+echo "all tests passed"
