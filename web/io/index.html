@@ -1,0 +1,54 @@
+<!doctype html>
+<!-- Open/save page: serve with python3 web/io/serve.py and open /io/index.html. -->
+<html lang="en"><head><meta charset="utf-8"><title>Workbook</title>
+<style>
+ body{font:14px system-ui,sans-serif;margin:16px}
+ #message{min-height:1.2em;color:#444}
+</style>
+</head><body>
+<input type="file" id="open" accept=".json,.csv">
+<button type="button" id="save-json">Save JSON</button>
+<button type="button" id="save-csv">Save CSV</button>
+<p id="message"></p>
+<div id="grid"></div>
+<script type="module">
+import { createController, download } from "./io.js";
+import { createState, mount } from "../grid/grid.js";
+
+const compute = async (book) =>
+  (await fetch("/compute", { method: "POST", body: JSON.stringify(book) })).json();
+
+const c = createController({ compute });
+let grid;
+
+const show = () => {
+  document.getElementById("message").textContent = c.state.message || "";
+  const host = document.getElementById("grid");
+  if (grid && grid.destroy) grid.destroy();
+  grid = mount(host, createState(c.state.computed, c.state.sheet), {
+    onChange: async (s) => {
+      await c.setBook(s.book);
+      show();
+    },
+  });
+  host.focus();
+};
+
+document.getElementById("open").onchange = async (e) => {
+  const file = e.target.files && e.target.files[0];
+  if (!file) return;
+  await c.openFile(file);
+  show();
+};
+
+document.getElementById("save-json").onclick = () => {
+  const s = c.saveJSON();
+  download(s.name, s.text, s.type);
+};
+document.getElementById("save-csv").onclick = () => {
+  const s = c.saveCSV();
+  download(s.name, s.text, s.type);
+};
+
+show();
+</script></body></html>
