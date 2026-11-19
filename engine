@@ -1,0 +1,6 @@
+#!/bin/sh
+# Spreadsheet engine CLI (Python 3). Usage: ./engine - [--cell Sheet1!A1]
+set -e
+ROOT="$(CDPATH= cd -- "$(dirname "$0")" && pwd)"
+export PYTHONPATH="$ROOT${PYTHONPATH:+:$PYTHONPATH}"
+exec python3 -m src.cli "$@"
