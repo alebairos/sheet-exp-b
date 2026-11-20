@@ -1,7 +1,6 @@
 """Lookup functions (intent i7-lookup).
 
-wi-i7-lookup-2 owns INDEX and MATCH (types 0 and 1). VLOOKUP lands in
-wi-i7-lookup-1 on the same FUNCTIONS table.
+VLOOKUP from wi-i7-lookup-1; INDEX and MATCH (types 0 and 1) from wi-i7-lookup-2.
 """
 
 from __future__ import annotations
@@ -52,6 +51,65 @@ def _table(arg):
             i += 1
         table.append(row)
     return table
+
+
+def _approx_flag(range_lookup):
+    """Calc: omitted/TRUE/nonzero ⇒ approximate; 0/FALSE ⇒ exact."""
+    if range_lookup is None or isinstance(range_lookup, Blank):
+        return True
+    if isinstance(range_lookup, Bool):
+        return range_lookup.value
+    if is_error(range_lookup):
+        return range_lookup
+    n = to_number(range_lookup)
+    if is_error(n):
+        return n
+    return n.value != 0
+
+
+def VLOOKUP(lookup, table, col_index, range_lookup=None):
+    probe = _scalar(lookup)
+    if is_error(probe):
+        return probe
+
+    grid = _table(table)
+    if is_error(grid):
+        return grid
+
+    idx = to_number(_scalar(col_index))
+    if is_error(idx):
+        return idx
+    col = int(idx.value)
+    width = len(grid[0]) if grid else 0
+    if col < 1 or col > width:
+        return VALUE
+
+    approx = _approx_flag(_scalar(range_lookup) if range_lookup is not None else Blank())
+    if is_error(approx):
+        return approx
+
+    if not approx:
+        for row in grid:
+            cmp = compare(row[0], probe)
+            if is_error(cmp):
+                return cmp
+            if cmp == 0:
+                return row[col - 1]
+        return NA
+
+    # Sorted ascending approximate: last key ≤ probe.
+    best = None
+    for row in grid:
+        cmp = compare(row[0], probe)
+        if is_error(cmp):
+            return cmp
+        if cmp <= 0:
+            best = row
+        else:
+            break
+    if best is None:
+        return NA
+    return best[col - 1]
 
 
 def _pos(v):
@@ -149,6 +207,7 @@ def MATCH(lookup, lookup_array, match_type=None):
 
 
 FUNCTIONS = {
+    "VLOOKUP": VLOOKUP,
     "INDEX": INDEX,
     "MATCH": MATCH,
 }
