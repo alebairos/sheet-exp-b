@@ -85,8 +85,21 @@ def _max(nums):
     return Number(max(nums))
 
 
-def _count(nums):
-    return Number(len(nums))
+def COUNT(*args):
+    n = 0
+    for arg in args:
+        for cell in _cells(arg):
+            if isinstance(cell, (Blank, Text)) or is_error(cell):
+                continue
+            if isinstance(cell, Bool):
+                n += 1
+            elif isinstance(cell, Number):
+                if not math.isfinite(cell.value):
+                    return NUM
+                n += 1
+            else:
+                return VALUE
+    return Number(float(n))
 
 
 def _product(nums):
@@ -151,8 +164,8 @@ def _quantize(x, digits, mode):
         d = int(digits)
     except (OverflowError, ValueError):
         return NUM
-    # Decimal(str(float)) keeps the binary float's decimal form Calc sees.
-    val = Decimal(str(x))
+    # .15g absorbs binary float noise near a halfway case (e.g. 4.5*0.95).
+    val = Decimal(format(x, ".15g"))
     quant = Decimal(1).scaleb(-d)
     try:
         out = val.quantize(quant, rounding=mode)
@@ -367,7 +380,8 @@ def _match(cell, crit):
         return cell.value.casefold() == crit.text.casefold()
     if isinstance(cell, Text):
         return _match_text(cell.value, crit)
-    return False
+    # Blank/number/bool vs a text criterion: only "<>" is a match (Calc COUNTIF).
+    return crit.op == "<>"
 
 
 def _matched(criteria_range, criteria, sum_range):
@@ -448,7 +462,7 @@ FUNCTIONS = {
     "AVERAGE": _apply(DIV0, _average),
     "MIN": _apply(Number(0.0), _min),
     "MAX": _apply(Number(0.0), _max),
-    "COUNT": _apply(Number(0.0), _count),
+    "COUNT": COUNT,
     "COUNTA": _counta,
     "PRODUCT": _apply(Number(0.0), _product),
     "MEDIAN": _apply(VALUE, _median),
