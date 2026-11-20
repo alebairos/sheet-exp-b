@@ -1,4 +1,4 @@
-"""Engine CLI: read SPEC.md workbook JSON, echo constants; optional --cell."""
+"""Engine CLI: read SPEC.md workbook JSON, recalculate, optional --cell."""
 from __future__ import annotations
 
 import argparse
@@ -6,27 +6,14 @@ import json
 import sys
 from typing import Any
 
+from src.recalc import recalculate
+
 
 def load_workbook(raw: str) -> dict[str, Any]:
     data = json.loads(raw)
     if not isinstance(data, dict) or "sheets" not in data:
         raise SystemExit("workbook JSON must be an object with a 'sheets' key")
     return data
-
-
-def compute_constants(workbook: dict[str, Any]) -> dict[str, Any]:
-    """Return workbook with constant cells unchanged. Formulas are out of scope here."""
-    sheets_out: dict[str, dict[str, Any]] = {}
-    for name, cells in workbook.get("sheets", {}).items():
-        if not isinstance(cells, dict):
-            sheets_out[name] = cells
-            continue
-        out_cells: dict[str, Any] = {}
-        for addr, value in cells.items():
-            # Constants only: leave values as-is (including formula strings; not evaluated).
-            out_cells[addr] = value
-        sheets_out[name] = out_cells
-    return {"sheets": sheets_out}
 
 
 def cell_value(workbook: dict[str, Any], ref: str) -> Any:
@@ -55,7 +42,7 @@ def main(argv: list[str] | None = None) -> int:
             raw = f.read()
 
     workbook = load_workbook(raw)
-    computed = compute_constants(workbook)
+    computed = recalculate(workbook)
 
     if args.cell:
         json.dump(cell_value(computed, args.cell), sys.stdout, separators=(",", ":"))
